@@ -50,7 +50,7 @@ class Book_Request(BaseModel):
     author:str = Field(min_length=3)
     category:str = Field(min_length=3)
     price:int = Field(gt=0)
-    owner_id:int = Field(gt=0)
+    # owner_id:int = Field(gt=0)
 
 class User_Request(BaseModel):
     username:str = Field(min_length=3)
@@ -81,8 +81,8 @@ class User_Response(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 # function to create JWT token
-def create_access_token(username:str,user_id:int,expiry_time:timedelta):
-    encode = {"sub":username,"id":user_id}
+def create_access_token(username:str,user_id:int,expiry_time:timedelta,role:str):
+    encode = {"sub":username,"id":user_id, "role":role}
     expiry = datetime.now(timezone.utc) + expiry_time
     encode.update({"exp":expiry})
     return jwt.encode(encode,SECRET_KEY,algorithm=ALGORITHM)
@@ -94,10 +94,11 @@ def verify_token(token:str):
         payload = jwt.decode(token,SECRET_KEY,algorithms=[ALGORITHM])
         username:str = payload.get('sub')
         user_id: int = payload.get('id')
+        role:str = payload.get('role')
 
         if username is None or user_id is None:
             raise HTTPException(status_code=401,detail="Couldn't verify the user")
-        return {"username":username,"id":user_id}
+        return {"username":username,"id":user_id,"role":role}
     except JWTError:
         raise HTTPException(status_code=401,detail="Couldn't verify the user")
 
@@ -128,11 +129,11 @@ auth_dependency = Annotated[dict,Depends(get_current_user)]
 #     },
 #     {
 #         "id": 2,
-#         "title": "The Alchemist",
-#         "author": "Paulo Coelho",
-#         "category": "Fiction",
-#         "price": 299,
-#         "owner_id": 2
+        # "title": "The Alchemist",
+        # "author": "Paulo Coelho",
+        # "category": "Fiction",
+        # "price": 299,
+        # "owner_id": 2
 #     },
 #     {
 #         "id": 3,
@@ -187,6 +188,7 @@ auth_dependency = Annotated[dict,Depends(get_current_user)]
 @router.get("/books",status_code=status.HTTP_200_OK,response_model = list[Book_Response]) # Response model is for single book but we are getting multiple books in list
 async def get_all_books(
     db:db_dependency,
+    current_user:auth_dependency,
     author:Optional[str]=Query(None,min_length=3),
     category:Optional[str]=Query(None,min_length=3),
     limit:Optional[int]=Query(None,gt=0,lt=21)
@@ -214,8 +216,8 @@ async def get_all_books(
     
 
 @router.post("/new_book",status_code=status.HTTP_201_CREATED,response_model=Book_Response)
-async def create_new_book(db:db_dependency,new_book:Book_Request):
-    book_model = Books(**new_book.model_dump())
+async def create_new_book(db:db_dependency,current_user:auth_dependency,new_book:Book_Request):
+    book_model = Books(**new_book.model_dump(),owner_id = current_user.get('id'))
     db.add(book_model)
     db.commit()
     db.refresh(book_model)
@@ -233,19 +235,32 @@ async def create_new_book(db:db_dependency,new_book:Book_Request):
 #     raise HTTPException(status_code=404,detail="ID not found")
 
 @router.put("/update_book/",status_code=status.HTTP_200_OK,response_model=Book_Response)
-async def update_book(db:db_dependency,updated_book:Book_Request,id:int=Query(gt=0)):
+async def update_book(db:db_dependency,current_user:auth_dependency,updated_book:Book_Request,id:int=Query(gt=0)):
     book_model = db.query(Books).filter(Books.id == id).first()
     if book_model is None:
         raise HTTPException(status_code=404,detail="ID not found")
 
-    book_model.title = updated_book.title
-    book_model.author = updated_book.author
-    book_model.category = updated_book.category
-    book_model.price = updated_book.price
-    book_model.owner_id = updated_book.owner_id
-
-    db.commit()
-    return book_model
+# Authorizing the user only who is authenticated & Role = Admin ->any book , user -> should match with current user id
+    if current_user.get('role').casefold() == 'admin':
+        book_model.title = updated_book.title
+        book_model.author = updated_book.author
+        book_model.category = updated_book.category
+        book_model.price = updated_book.price
+        db.commit()
+        return book_model
+    elif current_user.get('role').casefold() == 'user':
+        if book_model.owner_id == current_user.get('id'):
+            book_model.title = updated_book.title
+            book_model.author = updated_book.author
+            book_model.category = updated_book.category
+            book_model.price = updated_book.price
+            # book_model.owner_id = updated_book.owner_id
+            db.commit()
+            return book_model
+        else:
+            raise HTTPException(status_code=403,detail="Action Is Forbidden")
+    else:
+        raise HTTPException(status_code=403,detail='Role not found')
 
 # @router.delete("/delete_book/{book_id}",status_code=status.HTTP_200_OK)
 # async def delete_book(book_id:int=Path(gt=0)):
@@ -256,13 +271,25 @@ async def update_book(db:db_dependency,updated_book:Book_Request,id:int=Query(gt
 #     raise HTTPException(status_code=404,detail="Book not found")
 
 @router.delete("/delete_book/{book_id}",status_code=status.HTTP_200_OK)
-async def delete_book(db:db_dependency,book_id:int=Path(gt=0)):
+async def delete_book(db:db_dependency,current_user:auth_dependency,book_id:int=Path(gt=0)):
     book_model = db.query(Books).filter(Books.id == book_id).first()
     if book_model is None:
         raise HTTPException(status_code=404,detail="ID not found")
-    db.delete(book_model)
-    db.commit()
-    return{"message":"Book deleted successfully"}
+
+    # Admin - delete any book , user -> check the authenticated user id
+    if current_user.get('role').casefold() == 'admin':
+        db.delete(book_model)
+        db.commit()
+        return{"message":"Book deleted successfully"}
+    elif current_user.get('role').casefold() == 'user':
+        if book_model.owner_id == current_user.get('id'):
+            db.delete(book_model)
+            db.commit()
+            return{"message":"Book deleted successfully"}
+        else:
+            raise HTTPException(status_code=403,detail='Action Is Forbidden')
+    else:
+        raise HTTPException(status_code=403,detail="Role not found")
 
 # @router.get("/books/{book_id}",status_code=status.HTTP_200_OK)
 # async def get_book_by_id(book_id:int=Path(gt=0)):
@@ -274,10 +301,20 @@ async def delete_book(db:db_dependency,book_id:int=Path(gt=0)):
 # current user will first check the authenticity of jwt token and then execute the endpoint if valid
 @router.get("/books/{book_id}",status_code=status.HTTP_200_OK,response_model=Book_Response)
 async def get_book_by_id(db:db_dependency,current_user:auth_dependency,book_id:int=Path(gt=0)):
-    book_model = db.query(Books).filter(Books.id == book_id).first()
-    if book_model is None:
-        raise HTTPException(status_code=404,detail="ID not found")
-    return book_model
+    book_model = db.query(Books)
+    # Admin can view all books but user can view only his book
+    if current_user.get('role').casefold() == 'admin':
+        book_model = book_model.filter(Books.id == book_id).first()
+        if book_model is None:
+            raise HTTPException(status_code=404,detail="ID not found")
+        return book_model
+    elif current_user.get('role').casefold() == 'user':
+        book_model = book_model.filter(Books.owner_id == current_user.get('id'),Books.id == book_id).first()
+        if book_model is None:
+            raise HTTPException(status_code=404,detail="Requested book isnt available with that user.")
+        return book_model
+    else:
+        raise HTTPException(status_code=403,detail="Role not found")
 
 
 @router.post("/create_user",status_code=status.HTTP_201_CREATED,response_model=User_Response)
@@ -331,7 +368,7 @@ async def create_jwt_token(db:db_dependency,creds:Login_Request):
     stored_hashed = user_model.password
     if bcrypt_context.verify(creds.password,stored_hashed):
         # generate JWT
-        token = create_access_token(creds.username,user_model.id,timedelta(minutes=20))
+        token = create_access_token(creds.username,user_model.id,timedelta(minutes=20),user_model.role)
         return token
         
     else:
