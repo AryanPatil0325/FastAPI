@@ -193,26 +193,53 @@ async def get_all_books(
     category:Optional[str]=Query(None,min_length=3),
     limit:Optional[int]=Query(None,gt=0,lt=21)
     ):
-    filtered_books = db.query(Books)
+    # check for user role
+    if current_user.get('role').casefold() == "admin":
+        filtered_books = db.query(Books)
+        
+        if author is not None:
+            # filtered_books = [book for book in filtered_books if book.get('author').casefold() == author.casefold()]
+            filtered_books = filtered_books.filter(Books.author.ilike(author.casefold()))
+        
+        if category is not None:
+            # filtered_books = [book for book in filtered_books if book.get('category').casefold() == category.casefold()]
+            filtered_books = filtered_books.filter(Books.category.ilike(category.casefold()))
+
+        if limit is not None:
+            # filtered_books = filtered_books[:limit]
+            filtered_books = filtered_books.limit(limit)
+
+        book_query = filtered_books.all()
+
+        if not book_query: # checks for empty result
+            raise HTTPException(status_code=404,detail='Book not found')
+
+        return book_query
+
+    elif current_user.get('role').casefold() == 'user':
+        filtered_books = db.query(Books).filter(Books.owner_id == current_user.get('id'))
+        if author is not None:
+            # filtered_books = [book for book in filtered_books if book.get('author').casefold() == author.casefold()]
+            filtered_books = filtered_books.filter(Books.author.ilike(author.casefold()))
+                
+        if category is not None:
+            # filtered_books = [book for book in filtered_books if book.get('category').casefold() == category.casefold()]
+            filtered_books = filtered_books.filter(Books.category.ilike(category.casefold()))
+        
+        if limit is not None:
+            # filtered_books = filtered_books[:limit]
+            filtered_books = filtered_books.limit(limit)
+        
+        book_query = filtered_books.all()
+        
+        if not book_query: # checks for empty result
+            raise HTTPException(status_code=404,detail='Book not found')
+        
+        return book_query
     
-    if author is not None:
-        # filtered_books = [book for book in filtered_books if book.get('author').casefold() == author.casefold()]
-        filtered_books = filtered_books.filter(Books.author.ilike(author.casefold()))
-    
-    if category is not None:
-        # filtered_books = [book for book in filtered_books if book.get('category').casefold() == category.casefold()]
-        filtered_books = filtered_books.filter(Books.category.ilike(category.casefold()))
+    else:
+        raise HTTPException(status_code=403,detail="Role not allowed")
 
-    if limit is not None:
-        # filtered_books = filtered_books[:limit]
-        filtered_books = filtered_books.limit(limit)
-
-    book_query = filtered_books.all()
-
-    if not book_query: # checks for empty result
-        raise HTTPException(status_code=404,detail='Book not found')
-
-    return book_query
     
 
 @router.post("/new_book",status_code=status.HTTP_201_CREATED,response_model=Book_Response)
