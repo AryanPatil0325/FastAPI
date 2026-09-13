@@ -20,12 +20,16 @@ from fastapi.security import OAuth2PasswordBearer
 # from Swagger authenticator
 from fastapi.security import HTTPBearer,HTTPAuthorizationCredentials
 
+import os
+from dotenv import load_dotenv
+
 router = APIRouter()
+load_dotenv()
 
 # Swagger
 security = HTTPBearer()
 
-SECRET_KEY = "aryan"
+SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
 
 
@@ -390,7 +394,7 @@ async def create_jwt_token(db:db_dependency,creds:Login_Request):
     # find user in database
     user_model = db.query(Users).filter(Users.username == creds.username).first()
     if user_model is None:
-        raise HTTPException(status_code=401,detail=f"User of {creds.username} not found")
+        raise HTTPException(status_code=401,detail="Invalid username or password")
     # get stored hashed
     stored_hashed = user_model.password
     if bcrypt_context.verify(creds.password,stored_hashed):
