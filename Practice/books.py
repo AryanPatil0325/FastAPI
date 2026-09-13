@@ -16,7 +16,7 @@ from passlib.context import CryptContext
 
 from jose import jwt,JWTError
 
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import OAuth2PasswordBearer,OAuth2PasswordRequestForm
 # from Swagger authenticator
 from fastapi.security import HTTPBearer,HTTPAuthorizationCredentials
 
@@ -30,6 +30,10 @@ load_dotenv()
 security = HTTPBearer()
 
 SECRET_KEY = os.getenv("SECRET_KEY")
+
+if not SECRET_KEY:
+    raise RuntimeError("SECRET_KEY not set in environment")
+
 ALGORITHM = "HS256"
 
 
@@ -46,6 +50,9 @@ bcrypt_context = CryptContext(schemes=['bcrypt'],deprecated='auto') # used for p
 
 # get the JWT bearer token
 oauth2_bearer = OAuth2PasswordBearer(tokenUrl="login") # endpoint which return token
+
+oauth2pass = Annotated[OAuth2PasswordRequestForm,Depends()]
+
 
 # Pydantic model for validations
 class Book_Request(BaseModel):
@@ -107,87 +114,19 @@ def verify_token(token:str):
         raise HTTPException(status_code=401,detail="Couldn't verify the user")
 
 # Function that gets Authentication Bearer <JWT> and extracts it 
-# def get_current_user(token:Annotated[str,Depends(oauth2_bearer)]):
-#     return verify_token(token)
+def get_current_user(token:Annotated[str,Depends(oauth2_bearer)]):
+    return verify_token(token)
 
 # Swagger credentials
-async def get_current_user(
-    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)]
-):
-    token = credentials.credentials
-    return verify_token(token)
+# async def get_current_user(
+#     credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)]
+# ):
+#     token = credentials.credentials
+#     return verify_token(token)
 
 # authentication dependency to check for valid jwt
 auth_dependency = Annotated[dict,Depends(get_current_user)]
 
-
-# List of books
-# Books = [
-#     {
-#         "id": 1,
-        # "title": "Atomic Habits",
-        # "author": "James Clear",
-        # "category": "Self-Help",
-        # "price": 499,
-        # "owner_id": 1
-#     },
-#     {
-#         "id": 2,
-        # "title": "The Alchemist",
-        # "author": "Paulo Coelho",
-        # "category": "Fiction",
-        # "price": 299,
-        # "owner_id": 2
-#     },
-#     {
-#         "id": 3,
-        # "title": "Clean Code",
-        # "author": "Robert C. Martin",
-        # "category": "Programming",
-        # "price": 799,
-        # "owner_id": 1
-#     },
-#     {
-#         "id": 4,
-#         "title": "Deep Work",
-#         "author": "Cal Newport",
-#         "category": "Productivity",
-#         "price": 450,
-#         "owner_id": 3
-#     },
-#     {
-#         "id": 5,
-#         "title": "Harry Potter and the Philosopher's Stone",
-#         "author": "J.K. Rowling",
-#         "category": "Fantasy",
-#         "price": 599,
-#         "owner_id": 2
-#     },
-    # {
-    #     "id": 6,
-    #     "title": "The Psychology of Money",
-    #     "author": "Morgan Housel",
-    #     "category": "Finance",
-    #     "price": 399,
-    #     "owner_id": 3
-    # },
-#     {
-#         "id": 7,
-#         "title": "Python Crash Course",
-#         "author": "Eric Matthes",
-#         "category": "Programming",
-#         "price": 699,
-#         "owner_id": 1
-#     },
-#     {
-#         "id": 8,
-#         "title": "Ikigai",
-#         "author": "Hector Garcia",
-#         "category": "Self-Help",
-#         "price": 299,
-#         "owner_id": 2
-#     }
-# ]
 
 @router.get("/books",status_code=status.HTTP_200_OK,response_model = list[Book_Response]) # Response model is for single book but we are getting multiple books in list
 async def get_all_books(
@@ -390,17 +329,18 @@ class Login_Request(BaseModel):
 
 
 @router.post("/login")
-async def create_jwt_token(db:db_dependency,creds:Login_Request):
+async def create_jwt_token(db:db_dependency,credentials:oauth2pass):
     # find user in database
-    user_model = db.query(Users).filter(Users.username == creds.username).first()
+    user_model = db.query(Users).filter(Users.username == credentials.username).first()
     if user_model is None:
         raise HTTPException(status_code=401,detail="Invalid username or password")
     # get stored hashed
     stored_hashed = user_model.password
-    if bcrypt_context.verify(creds.password,stored_hashed):
+    if bcrypt_context.verify(credentials.password,stored_hashed):
         # generate JWT
-        token = create_access_token(creds.username,user_model.id,timedelta(minutes=20),user_model.role)
-        return token
+        token = create_access_token(credentials.username,user_model.id,timedelta(minutes=20),user_model.role)
+        # return token
+        return {"access_token":token,"token_type":"bearer"}
         
     else:
         raise HTTPException(status_code=401,detail='Invalid username or password')
