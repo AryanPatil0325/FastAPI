@@ -35,6 +35,7 @@ class UserRequest(BaseModel):
     last_name:str
     password:str
     role:str
+    phone_number:str
 
 # Token class to validate the response of token
 class Token(BaseModel):
@@ -101,7 +102,8 @@ async def create_new_user(db:db_dependency,create_user:UserRequest):
         last_name = create_user.last_name,
         hashed_password = bcrypt_context.hash(create_user.password),
         role = create_user.role,
-        is_active = True
+        is_active = True,
+        phone_number = create_user.phone_number
     )
     db.add(create_user_model)
     db.commit()
