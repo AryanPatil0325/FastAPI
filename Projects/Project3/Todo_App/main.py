@@ -2,15 +2,20 @@
 
 #imports
 from fastapi import FastAPI
-from database import engine
-import models
-from router import auth,todos,admin,users # to connect the auth file to main
+from .database import engine
+from .models import Base
+from .router import auth,todos,admin,users # to connect the auth file to main
 
 # initialize FastAPI
 app = FastAPI()
 
+# testing if connection is healthy
+@app.get("/check_health")
+async def health_check():
+    return {"status":"Healthy"}
+
 # create all database tables mentioned inside models 
-models.Base.metadata.create_all(bind=engine)
+Base.metadata.create_all(bind=engine)
 
 # routing the auth.py file with main.py file
 app.include_router(auth.router)

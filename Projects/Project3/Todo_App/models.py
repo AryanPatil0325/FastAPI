@@ -12,7 +12,7 @@
 # |  Int      |   Str     |   str         |   int         |   boolean     | int            |
 
 # imports
-from database import Base
+from .database import Base
 from sqlalchemy import Column,Integer,String,Boolean,ForeignKey
 
 # class for table model - Users

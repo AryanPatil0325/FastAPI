@@ -5,10 +5,10 @@ from typing import Annotated
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from fastapi import Depends, APIRouter, HTTPException, Path
-from database import SessionLocal
-from models import Todos
+from ..database import SessionLocal
+from ..models import Todos
 from starlette import status
-from router.auth import get_current_user
+from .auth import get_current_user
 
 
 # initialize APIRouter
