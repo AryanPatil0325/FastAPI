@@ -12,7 +12,10 @@ from .auth import get_current_user
 
 
 # initialize APIRouter
-router = APIRouter()
+router = APIRouter(
+    prefix='/todos',
+    tags=['todos']
+)
 
 # dependency to create a new session everytime and closing it safely
 def get_db():

@@ -7,7 +7,7 @@ app.dependency_overrides[get_current_user] = override_get_current_user
 
 # test for all records
 def test_all_authenticated_records(test_todo):
-    response = client.get("/records")
+    response = client.get("/todos/records")
     assert response.status_code == status.HTTP_200_OK
     assert response.json() == [{
         "title" : "Learn to code",
@@ -20,7 +20,7 @@ def test_all_authenticated_records(test_todo):
 
 # test for get record by id
 def test_single_authenticated_record(test_todo):
-    response = client.get("/records/1")
+    response = client.get("/todos/records/1")
     assert response.status_code == status.HTTP_200_OK
     assert response.json() == {
         "title" : "Learn to code",
@@ -33,7 +33,7 @@ def test_single_authenticated_record(test_todo):
 
 # test for get record by id not found 
 def test_single_authenticated_record_not_found(test_todo):
-    response = client.get("/records/999")
+    response = client.get("/todos/records/999")
     assert response.status_code == 404
     assert response.json() == {"detail":"Todo ID not found"}
 
@@ -47,7 +47,7 @@ def test_create_todo(test_todo):
         "owner_id" : 1
     }
 
-    response = client.post("/create_todo",json=request_data)
+    response = client.post("/todos/create_todo",json=request_data)
     assert response.status_code == 201
 
     db = TestSessionLocal()
@@ -68,7 +68,7 @@ def test_authenticated_update_todo(test_todo):
         "owner_id" : 1
     }
 
-    response = client.put("/update_todo/1",json= request_update_data)
+    response = client.put("/todos/update_todo/1",json= request_update_data)
     assert response.status_code == 204
     db = TestSessionLocal()
     test_model = db.query(Todos).filter(Todos.id == 1).first()
@@ -88,13 +88,13 @@ def test_update_todo_not_found(test_todo):
         "owner_id" : 1
     }
 
-    response = client.put("/update_todo/999",json= request_update_data)
+    response = client.put("/todos/update_todo/999",json= request_update_data)
     assert response.status_code == 404
     assert response.json() == {"detail":"Todo ID not found"}
 
 # test delete todo
 def test_delete_todo(test_todo):
-    response = client.delete("/delete_todo/1")
+    response = client.delete("/todos/delete_todo/1")
     assert response.status_code == 204
     db = TestSessionLocal()
     test_model = db.query(Todos).filter(Todos.id == 1).first()
@@ -102,6 +102,6 @@ def test_delete_todo(test_todo):
 
 # test delete todo not found
 def test_delete_todo_not_found(test_todo):
-    response = client.delete("/delete_todo/999")
+    response = client.delete("/todos/delete_todo/999")
     assert response.status_code == 404
     assert response.json() == {"detail":"Todo not found"}

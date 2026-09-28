@@ -13,6 +13,8 @@ from starlette import status
 from sqlalchemy.orm import Session
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer # to decode the JWT 
 from jose import JWTError, jwt
+from fastapi.templating import Jinja2Templates
+from fastapi import Request
 
 
 # instance
@@ -58,6 +60,29 @@ pass_dependency = Annotated[OAuth2PasswordRequestForm,Depends()]
 
 # OAuth2PasswordBearer Dependency Injection to retrieve and validate the URL passed by user
 oauth2bearer = OAuth2PasswordBearer(tokenUrl='auth/token') # token is like an endpoint "/token"
+
+# Jinja2 Templates
+templates = Jinja2Templates(directory="Todo_App/templates")
+
+### Pages ###
+@router.get("/login-page")
+def render_login_page(request:Request):
+    return templates.TemplateResponse(
+        name="login.html",
+        context={"request":request},
+        request=request,
+        status_code=200
+    )
+
+@router.get("/register-page")
+def render_register_page(request:Request):
+    return templates.TemplateResponse(
+        name="register.html",
+        context={"request":request},
+        request=request,
+        status_code=200
+    )
+
 
 # Authenticate Users
 def authenticate_users(username:str, password:str, db):
